@@ -1,0 +1,30 @@
+{
+  "name": "messenger-bot-arena",
+  "version": "1.0.0",
+  "description": "Automatización de Facebook Messenger con Playwright, MongoDB y panel administrativo",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.14.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "create-admin": "node scripts/create-admin.mjs",
+    "test": "node --test test/unit/",
+    "test:integration": "node --test test/integration/"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "jsonwebtoken": "^9.0.3",
+    "moment-timezone": "^0.5.45",
+    "mongoose": "^8.9.5",
+    "node-cron": "^4.6.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "playwright": "^1.49.0"
+  }
+}

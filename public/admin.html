@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messenger Bot Arena — Admin</title>
+<style>
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #242836;
+  --border: #2e3347; --text: #e4e6eb; --text2: #9aa0ae;
+  --accent: #0084ff; --success: #22c55e; --danger: #ef4444; --warning: #f59e0b;
+  --radius: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+button { cursor: pointer; border: none; border-radius: var(--radius); padding: 10px 18px; font-size: 14px; font-weight: 600; transition: opacity .2s; }
+button:hover { opacity: .85; }
+button:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-secondary { background: var(--bg3); color: var(--text); }
+input, select, textarea { width: 100%; padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--text2); font-weight: 600; }
+.container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+#login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.login-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 100%; max-width: 400px; }
+.login-box h1 { text-align: center; margin-bottom: 8px; font-size: 24px; }
+.login-box p { text-align: center; color: var(--text2); margin-bottom: 24px; font-size: 14px; }
+.login-box form > div { margin-bottom: 16px; }
+
+header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+header h1 { font-size: 18px; }
+header .user-info { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--text2); }
+
+.tabs { display: flex; gap: 4px; padding: 0 20px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.tab { padding: 14px 20px; background: none; border: none; border-radius: 0; color: var(--text2); font-size: 14px; font-weight: 600; border-bottom: 3px solid transparent; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.card h3 { margin-bottom: 16px; font-size: 16px; }
+
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.status-item { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.status-item .label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+.status-item .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+
+.badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.badge-connected { background: rgba(34,197,94,.15); color: var(--success); }
+.badge-disconnected { background: rgba(239,68,68,.15); color: var(--danger); }
+.badge-error { background: rgba(239,68,68,.15); color: var(--danger); }
+.badge-auth { background: rgba(245,158,11,.15); color: var(--warning); }
+.badge-connecting, .badge-starting { background: rgba(0,132,255,.15); color: var(--accent); }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { color: var(--text2); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+tr:hover td { background: rgba(255,255,255,.02); }
+
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 14px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 600; z-index: 1000; animation: slideIn .3s ease; }
+.toast-success { background: var(--success); color: #fff; }
+.toast-error { background: var(--danger); color: #fff; }
+@keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+@media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } }
+
+.search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-row input { flex: 1; }
+
+.chat-list { max-height: 320px; overflow-y: auto; margin-bottom: 16px; }
+.chat-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--bg3); border-radius: var(--radius); margin-bottom: 8px; }
+.chat-item .info { flex: 1; min-width: 0; }
+.chat-item .name { font-weight: 600; font-size: 14px; }
+.chat-item .meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.chat-item .actions { display: flex; gap: 8px; flex-shrink: 0; }
+.chat-item .actions button { padding: 6px 12px; font-size: 12px; }
+
+.log-success { color: var(--success); }
+.log-failed { color: var(--danger); }
+.log-uncertain { color: var(--warning); }
+
+.empty { text-align: center; color: var(--text2); padding: 30px; font-size: 14px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <h1>Messenger Bot Arena</h1>
+    <p>Admin Panel</p>
+    <form id="login-form">
+      <div><label>Username</label><input type="text" id="login-user" required autocomplete="username"></div>
+      <div><label>Password</label><input type="password" id="login-pass" required autocomplete="current-password"></div>
+      <button type="submit" class="btn-primary" style="width:100%">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<div id="app-screen" class="hidden">
+  <header>
+    <h1>Messenger Bot Arena</h1>
+    <div class="user-info">
+      <span id="current-user"></span>
+      <button class="btn-secondary" onclick="logout()">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="tab" data-tab="send" onclick="showTab('send')">Send Message</button>
+    <button class="tab" data-tab="scheduled" onclick="showTab('scheduled')">Scheduled</button>
+    <button class="tab" data-tab="history" onclick="showTab('history')">History</button>
+  </nav>
+
+  <div class="container">
+
+    <div id="panel-dashboard" class="panel active">
+      <div class="status-grid" id="status-grid"></div>
+      <div class="card">
+        <h3>Connection Controls</h3>
+        <div class="btn-group">
+          <button class="btn-success" onclick="connectMessenger()">Connect Messenger</button>
+          <button class="btn-primary" onclick="retryConnection()">Retry Connection</button>
+          <button class="btn-danger" onclick="disconnectMessenger()">Disconnect</button>
+          <button class="btn-secondary" onclick="refreshStatus()">Refresh Status</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Recent Sends</h3>
+        <div id="recent-sends"><div class="empty">No messages sent yet</div></div>
+      </div>
+    </div>
+
+    <div id="panel-send" class="panel">
+      <div class="card">
+        <h3>Find a Chat</h3>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Search your Messenger chats to send a message or schedule one.</p>
+        <div class="search-row">
+          <input type="text" id="send-search" placeholder="Search chats by name..." onkeyup="if(event.key==='Enter')searchChatsForSend()">
+          <button class="btn-primary" onclick="searchChatsForSend()" style="white-space:nowrap">Search</button>
+        </div>
+        <div id="send-search-results" class="chat-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Send Message</h3>
+        <div class="form-row">
+          <div><label>Selected Chat</label><input type="text" id="send-chat-name" placeholder="Search and select a chat above" readonly></div>
+          <div><label>Chat ID</label><input type="text" id="send-chat-id" placeholder="Chat ID"></div>
+        </div>
+        <div style="margin-bottom:16px"><label>Message</label><textarea id="send-message" rows="4" placeholder="Type your message..."></textarea></div>
+        <button class="btn-primary" onclick="sendMessageNow()">Send Now</button>
+        <div id="send-result" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <div id="panel-scheduled" class="panel">
+      <div class="card">
+        <h3>Find a Chat</h3>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Search your Messenger chats to schedule a message.</p>
+        <div class="search-row">
+          <input type="text" id="sched-search" placeholder="Search chats by name..." onkeyup="if(event.key==='Enter')searchChatsForSchedule()">
+          <button class="btn-primary" onclick="searchChatsForSchedule()" style="white-space:nowrap">Search</button>
+        </div>
+        <div id="sched-search-results" class="chat-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Schedule a Message</h3>
+        <div class="form-row">
+          <div><label>Selected Chat</label><input type="text" id="sched-chat-name" placeholder="Search and select a chat above" readonly></div>
+          <div><label>Chat ID</label><input type="text" id="sched-chat-id" placeholder="Chat ID"></div>
+        </div>
+        <div style="margin-bottom:16px"><label>Message</label><textarea id="sched-message" rows="3" placeholder="Type your message..."></textarea></div>
+        <div class="form-row">
+          <div><label>Date & Time</label><input type="datetime-local" id="sched-datetime"></div>
+          <div><label>Timezone</label><input type="text" id="sched-timezone" value="Asia/Bangkok"></div>
+        </div>
+        <button class="btn-primary" onclick="scheduleMessage()">Schedule</button>
+        <div id="sched-result" style="margin-top:16px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Scheduled Messages</h3>
+        <div id="scheduled-list"><div class="empty">No scheduled messages</div></div>
+      </div>
+    </div>
+
+    <div id="panel-history" class="panel">
+      <div class="card">
+        <h3>Send History</h3>
+        <div id="history-list"><div class="empty">No history</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+let selectedChat = { id: null, name: null, type: 'user' };
+
+async function api(path, options = {}) {
+  console.log('[API] Request:', path, options.method || 'GET');
+  let res;
+  try {
+    res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers }, credentials: 'include' });
+    console.log('[API] Response:', path, res.status, res.statusText);
+  } catch (e) {
+    console.error('[API] Fetch error:', path, e.message);
+    window.location.reload();
+    throw e;
+  }
+  if (!res.ok && res.status === 401) {
+    console.warn('[API] 401 Unauthorized:', path);
+    const current = window.location.pathname;
+    if (current !== '/admin') {
+      window.location.href = '/admin';
+    }
+    throw new Error('Unauthorized');
+  }
+  const data = await res.json();
+  console.log('[API] Data:', path, JSON.stringify(data).substring(0, 200));
+  return data;
+}
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function showLogin() {
+  console.log('[UI] showLogin()');
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app-screen').classList.add('hidden');
+}
+
+function showApp() {
+  console.log('[UI] showApp()');
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.remove('hidden');
+}
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const u = document.getElementById('login-user').value;
+  const p = document.getElementById('login-pass').value;
+  console.log('[LOGIN] Submit — username:', u, '| password length:', p.length);
+  try {
+    const data = await api('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    console.log('[LOGIN] Response:', JSON.stringify(data));
+    if (data.ok) {
+      console.log('[LOGIN] Redirecting to /admin...');
+      window.location.href = '/admin';
+    } else {
+      console.warn('[LOGIN] Not ok:', data.error);
+    }
+  } catch (err) {
+    console.error('[LOGIN] Error:', err.message);
+    toast(err.message, 'error');
+  }
+});
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+  if (name === 'dashboard') { refreshStatus(); loadHistory(); }
+  if (name === 'scheduled') loadScheduled();
+  if (name === 'history') loadHistory();
+}
+
+
+
+async function logout() {
+  await api('/api/admin/logout', { method: 'POST' });
+  currentUser = null;
+  showLogin();
+}
+
+async function refreshStatus() {
+  try {
+    const s = await api('/api/admin/status');
+    const stateClass = s.state === 'connected' ? 'connected' : s.state === 'error' ? 'error' : s.state === 'authentication_required' ? 'auth' : s.state === 'disconnected' ? 'disconnected' : 'connecting';
+    document.getElementById('status-grid').innerHTML = `
+      <div class="status-item"><div class="label">Status</div><div class="value"><span class="badge badge-${stateClass}">${s.state}</span></div></div>
+      <div class="status-item"><div class="label">Browser</div><div class="value">${s.browserActive ? 'Active' : 'Inactive'}</div></div>
+      <div class="status-item"><div class="label">Last Connected</div><div class="value" style="font-size:13px">${s.lastConnectedAt ? new Date(s.lastConnectedAt).toLocaleString() : '—'}</div></div>
+      <div class="status-item"><div class="label">Messages Sent</div><div class="value">${s.messagesSent}</div></div>
+      <div class="status-item"><div class="label">Last Error</div><div class="value" style="font-size:11px;color:${s.lastError ? 'var(--danger)' : 'var(--text2)'}">${s.lastError || '—'}</div></div>
+    `;
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function connectMessenger() {
+  toast('Opening browser. Please complete Facebook login in the Chromium window...');
+  const s = await api('/api/admin/connect', { method: 'POST' });
+  refreshStatus();
+  toast(`Status: ${s.state}`, s.state === 'connected' ? 'success' : 'error');
+}
+
+async function disconnectMessenger() {
+  await api('/api/admin/disconnect', { method: 'POST' });
+  refreshStatus();
+  toast('Disconnected');
+}
+
+async function retryConnection() {
+  const s = await api('/api/admin/retry', { method: 'POST' });
+  refreshStatus();
+  toast(`Status: ${s.state}`, s.state === 'connected' ? 'success' : 'error');
+}
+
+async function searchChatsForSend() {
+  const q = document.getElementById('send-search').value.trim();
+  if (!q) return;
+  try {
+    const data = await api(`/api/admin/contacts/search?q=${encodeURIComponent(q)}`);
+    renderChatSearchResults(data.results || [], 'send-search-results', 'send');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function searchChatsForSchedule() {
+  const q = document.getElementById('sched-search').value.trim();
+  if (!q) return;
+  try {
+    const data = await api(`/api/admin/contacts/search?q=${encodeURIComponent(q)}`);
+    renderChatSearchResults(data.results || [], 'sched-search-results', 'sched');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function renderChatSearchResults(list, containerId, target) {
+  const el = document.getElementById(containerId);
+  if (!list.length) { el.innerHTML = '<div class="empty">No chats found</div>'; return; }
+  el.innerHTML = list.map(c => `
+    <div class="chat-item">
+      <div class="info">
+        <div class="name">${esc(c.name)}</div>
+        <div class="meta">ID: ${esc(c.conversationId || 'N/A')}</div>
+      </div>
+      <div class="actions">
+        <button class="btn-secondary" onclick="copyId('${esc(c.conversationId || '')}')">Copy ID</button>
+        <button class="btn-primary" onclick="selectChat('${esc(c.conversationId || '')}', '${esc(c.name)}', '${esc(c.type)}', '${target}')">Select</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectChat(id, name, type, target) {
+  selectedChat = { id, name, type };
+  if (target === 'send') {
+    document.getElementById('send-chat-id').value = id;
+    document.getElementById('send-chat-name').value = name;
+  } else {
+    document.getElementById('sched-chat-id').value = id;
+    document.getElementById('sched-chat-name').value = name;
+  }
+  toast(`Selected: ${name}`);
+}
+
+function copyId(id) {
+  if (!id) return toast('No ID available', 'error');
+  navigator.clipboard.writeText(id).then(() => toast('ID copied'));
+}
+
+async function sendMessageNow() {
+  const recipientId = document.getElementById('send-chat-id').value.trim();
+  const message = document.getElementById('send-message').value;
+  const resultEl = document.getElementById('send-result');
+  if (!recipientId) return toast('Select a chat first', 'error');
+  try {
+    const data = await api('/api/admin/send', { method: 'POST', body: JSON.stringify({ recipientType: selectedChat.type || 'user', recipientId, message }) });
+    if (data.success) {
+      resultEl.innerHTML = `<div class="chat-item"><div class="info"><div class="name log-success">Message sent</div><div class="meta">To: ${esc(recipientId)} · ${new Date().toLocaleString()}</div></div></div>`;
+      toast('Message sent');
+    } else {
+      resultEl.innerHTML = `<div class="chat-item"><div class="info"><div class="name log-uncertain">Uncertain delivery</div><div class="meta">${esc(data.error || 'Could not verify send')}</div></div></div>`;
+      toast('Delivery uncertain', 'error');
+    }
+    refreshStatus();
+  } catch (err) {
+    resultEl.innerHTML = `<div class="chat-item"><div class="info"><div class="name log-failed">Error: ${esc(err.message)}</div></div></div>`;
+    toast(err.message, 'error');
+  }
+}
+
+async function scheduleMessage() {
+  const recipientId = document.getElementById('sched-chat-id').value.trim();
+  const recipientName = document.getElementById('sched-chat-name').value;
+  const message = document.getElementById('sched-message').value;
+  const scheduledAt = document.getElementById('sched-datetime').value;
+  const timezone = document.getElementById('sched-timezone').value;
+  const resultEl = document.getElementById('sched-result');
+  if (!recipientId || !message || !scheduledAt) return toast('Fill all fields', 'error');
+  try {
+    await api('/api/admin/scheduled', {
+      method: 'POST',
+      body: JSON.stringify({ name: `To: ${recipientName}`, message, recipientType: selectedChat.type || 'user', recipientId, recipientName, scheduledAt, timezone }),
+    });
+    toast('Message scheduled');
+    loadScheduled();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function loadScheduled() {
+  try {
+    const data = await api('/api/admin/scheduled');
+    const el = document.getElementById('scheduled-list');
+    const list = data.scheduled || [];
+    if (!list.length) { el.innerHTML = '<div class="empty">No scheduled messages</div>'; return; }
+    el.innerHTML = `<table><tr><th>Name</th><th>Recipient</th><th>When</th><th>Status</th><th>Actions</th></tr>${
+      list.map(s => `<tr>
+        <td>${esc(s.name)}</td><td>${esc(s.recipientName)}</td>
+        <td>${new Date(s.scheduledAt).toLocaleString()}</td>
+        <td class="log-${s.status === 'sent' ? 'success' : s.status === 'failed' ? 'failed' : s.status === 'uncertain' ? 'uncertain' : ''}">${s.status}</td>
+        <td><button class="btn-secondary" onclick="toggleScheduled('${s._id}', ${!s.isActive})">${s.isActive ? 'Disable' : 'Enable'}</button> <button class="btn-danger" onclick="deleteScheduled('${s._id}')">Delete</button></td>
+      </tr>`).join('')}</table>`;
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function toggleScheduled(id, isActive) {
+  await api(`/api/admin/scheduled/${id}`, { method: 'PUT', body: JSON.stringify({ isActive }) });
+  loadScheduled();
+}
+
+async function deleteScheduled(id) {
+  await api(`/api/admin/scheduled/${id}`, { method: 'DELETE' });
+  loadScheduled();
+}
+
+async function loadHistory() {
+  try {
+    const data = await api('/api/admin/logs');
+    const list = data.logs || [];
+    const render = (items, container) => {
+      const el = document.getElementById(container);
+      if (!items.length) { el.innerHTML = '<div class="empty">No records</div>'; return; }
+      el.innerHTML = `<table><tr><th>Date</th><th>Recipient</th><th>Status</th><th>Error</th></tr>${
+        items.map(l => `<tr>
+          <td>${new Date(l.sentAt).toLocaleString()}</td><td>${esc(l.recipientName || l.recipientId)}</td>
+          <td class="log-${l.status === 'sent' ? 'success' : l.status === 'failed' ? 'failed' : 'uncertain'}">${l.status}</td>
+          <td>${esc(l.error || '—')}</td>
+        </tr>`).join('')}</table>`;
+    };
+    render(list.slice(0, 5), 'recent-sends');
+    render(list, 'history-list');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+(async () => {
+  try {
+    const me = await api('/api/admin/me');
+    currentUser = me.username;
+    document.getElementById('current-user').textContent = currentUser;
+    showApp();
+    refreshStatus();
+  } catch { showLogin(); }
+})();
+</script>
+</body>
+</html>
