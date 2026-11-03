@@ -530,7 +530,21 @@ export class MessengerService {
         await this.page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
         await this.page.keyboard.press('Backspace');
       }
-      await messageInput.type(message, { delay: 50 });
+
+      // Messenger sends the message on Enter, so typing a multiline string
+      // would deliver it as several separate messages. Type every line and
+      // insert line breaks with Shift+Enter so it all goes in one message.
+      const lines = message.split(/\r?\n/);
+      for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index]) {
+          await messageInput.type(lines[index], { delay: 25 });
+        }
+        if (index < lines.length - 1) {
+          await this.page.keyboard.down('Shift');
+          await this.page.keyboard.press('Enter');
+          await this.page.keyboard.up('Shift');
+        }
+      }
       await this.page.waitForTimeout(500);
 
       const sendButton = await this.page.$(facebookSelectors.sendButton);
