@@ -535,9 +535,10 @@ export class MessengerService {
       // would deliver it as several separate messages. Type every line and
       // insert line breaks with Shift+Enter so it all goes in one message.
       const lines = message.split(/\r?\n/);
+      await messageInput.click();
       for (let index = 0; index < lines.length; index += 1) {
         if (lines[index]) {
-          await messageInput.type(lines[index], { delay: 25 });
+          await this.page.keyboard.type(lines[index], { delay: 25 });
         }
         if (index < lines.length - 1) {
           await this.page.keyboard.down('Shift');
@@ -576,9 +577,10 @@ export class MessengerService {
     try {
       const messages = await this.page.$$('[data-testid="message"], [role="main"] [dir="auto"]');
       const lastMessages = messages.slice(-5);
+      const needle = message.substring(0, 40).replace(/\\s+/g, ' ').trim();
       for (const msg of lastMessages) {
-        const text = (await msg.textContent())?.trim();
-        if (text && text.includes(message.substring(0, 50))) {
+        const text = (await msg.textContent())?.replace(/\\s+/g, ' ').trim();
+        if (text && text.includes(needle)) {
           return true;
         }
       }
