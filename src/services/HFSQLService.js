@@ -140,6 +140,18 @@ export async function query(sql, params = []) {
   try {
     logger.info({ sql: sql.substring(0, 200) }, 'EJECUTANDO QUERY HFSQL');
     const result = await connection.query(sql, params);
+    // Convert BigInt values to Number to avoid JSON serialization errors
+    if (Array.isArray(result)) {
+      for (const row of result) {
+        if (row && typeof row === 'object') {
+          for (const key of Object.keys(row)) {
+            if (typeof row[key] === 'bigint') {
+              row[key] = Number(row[key]);
+            }
+          }
+        }
+      }
+    }
     logger.info({ resultType: typeof result, isArray: Array.isArray(result), keys: result ? Object.keys(result) : null, length: result?.length }, 'RESULTADO RAW HFSQL');
     // result is an array of row objects, with .columns, .count, etc.
     // But the filter might remove all rows if they have a 'statement' property.
