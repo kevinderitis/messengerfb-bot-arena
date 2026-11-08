@@ -117,6 +117,7 @@ tr:hover td { background: rgba(255,255,255,.02); }
   <nav class="tabs">
     <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
     <button class="tab" data-tab="send" onclick="showTab('send')">Send Message</button>
+    <button class="tab" data-tab="sql" onclick="showTab('sql')">Query SQL</button>
     <button class="tab" data-tab="scheduled" onclick="showTab('scheduled')">Scheduled</button>
     <button class="tab" data-tab="history" onclick="showTab('history')">History</button>
   </nav>
@@ -160,6 +161,31 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div style="margin-bottom:16px"><label>Message</label><textarea id="send-message" rows="4" placeholder="Type your message..."></textarea></div>
         <button class="btn-primary" onclick="sendMessageNow()">Send Now</button>
         <div id="send-result" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <div id="panel-sql" class="panel">
+      <div class="card">
+        <h3>HFSQL Connection</h3>
+        <div id="hfsql-status" style="margin-bottom:16px"><div class="empty">Loading...</div></div>
+        <div class="btn-group">
+          <button class="btn-success" onclick="hfsqlConnect()">Connect</button>
+          <button class="btn-danger" onclick="hfsqlDisconnect()">Disconnect</button>
+          <button class="btn-secondary" onclick="hfsqlTest()">Test Connection</button>
+          <button class="btn-secondary" onclick="hfsqlLoadTables()">Load Tables</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>SQL Query</h3>
+        <div style="margin-bottom:16px">
+          <textarea id="sql-query" rows="6" placeholder="SELECT * FROM my_table" style="font-family:monospace;font-size:13px"></textarea>
+        </div>
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn-primary" onclick="hfsqlExecute()">Execute Query</button>
+          <button class="btn-secondary" onclick="hfsqlClearResults()">Clear Results</button>
+        </div>
+        <div id="sql-tables" style="margin-bottom:16px"></div>
+        <div id="sql-results"><div class="empty">No results yet</div></div>
       </div>
     </div>
 
@@ -280,6 +306,7 @@ function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
   if (name === 'dashboard') { refreshStatus(); loadHistory(); }
+  if (name === 'sql') { hfsqlRefreshStatus(); hfsqlLoadTables(); }
   if (name === 'scheduled') loadScheduled();
   if (name === 'history') loadHistory();
 }
@@ -465,6 +492,93 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = s || '';
   return d.innerHTML;
+}
+
+// --- HFSQL ---
+async function hfsqlRefreshStatus() {
+  try {
+    const s = await api('/api/hfsql/status');
+    const el = document.getElementById('hfsql-status');
+    if (s.connected) {
+      el.innerHTML = `<div class="chat-item"><div class="info"><div class="name log-success">Connected</div><div class="meta">${esc(s.mode)} · ${esc(s.server)}:${s.port} · ${esc(s.database || 'default')}</div></div></div>`;
+    } else {
+      el.innerHTML = `<div class="chat-item"><div class="info"><div class="name log-failed">Disconnected</div><div class="meta">${esc(s.lastError || 'Not connected')}</div></div></div>`;
+    }
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function hfsqlConnect() {
+  try {
+    const data = await api('/api/hfsql/connect', { method: 'POST' });
+    toast(data.message || 'Connected', data.connected ? 'success' : 'error');
+    hfsqlRefreshStatus();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function hfsqlDisconnect() {
+  try {
+    await api('/api/hfsql/disconnect', { method: 'POST' });
+    toast('Disconnected');
+    hfsqlRefreshStatus();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function hfsqlTest() {
+  try {
+    const data = await api('/api/hfsql/test', { method: 'POST' });
+    toast(data.message, data.success ? 'success' : 'error');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function hfsqlLoadTables() {
+  try {
+    const data = await api('/api/hfsql/tables');
+    const el = document.getElementById('sql-tables');
+    const tables = data.tables || [];
+    if (!tables.length) { el.innerHTML = '<div class="empty">No tables found</div>'; return; }
+    el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
+      tables.map(t => `<button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="hfsqlSelectTable('${esc(t.name)}')">${esc(t.name)}</button>`).join('') +
+      '</div>';
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+function hfsqlSelectTable(name) {
+  document.getElementById('sql-query').value = `SELECT * FROM ${name}`;
+}
+
+async function hfsqlExecute() {
+  const sql = document.getElementById('sql-query').value.trim();
+  if (!sql) return toast('Enter a SQL query', 'error');
+  const resultEl = document.getElementById('sql-results');
+  resultEl.innerHTML = '<div class="empty">Executing...</div>';
+  try {
+    const data = await api('/api/hfsql/query', { method: 'POST', body: JSON.stringify({ sql }) });
+    const rows = data.rows || [];
+    const columns = data.columns || [];
+    if (!rows.length) {
+      resultEl.innerHTML = '<div class="empty">No results returned</div>';
+      return;
+    }
+    let html = '<div style="overflow-x:auto"><table><tr>';
+    columns.forEach(c => { html += `<th>${esc(c)}</th>`; });
+    html += '</tr>';
+    rows.forEach(row => {
+      html += '<tr>';
+      columns.forEach(c => { html += `<td>${esc(String(row[c] ?? ''))}</td>`; });
+      html += '</tr>';
+    });
+    html += '</table></div>';
+    html += `<div style="margin-top:8px;color:var(--text2);font-size:12px">${rows.length} row(s) returned</div>`;
+    resultEl.innerHTML = html;
+  } catch (err) {
+    resultEl.innerHTML = `<div class="empty log-failed">Error: ${esc(err.message)}</div>`;
+    toast(err.message, 'error');
+  }
+}
+
+function hfsqlClearResults() {
+  document.getElementById('sql-results').innerHTML = '<div class="empty">No results yet</div>';
+  document.getElementById('sql-query').value = '';
 }
 
 (async () => {

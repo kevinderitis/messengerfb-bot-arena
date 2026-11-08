@@ -7,6 +7,7 @@ import config from './config.js';
 import logger from './utils/logger.js';
 import adminRoutes from './routes/admin.js';
 import messengerRoutes from './routes/messenger.js';
+import hfsqlRoutes from './routes/hfsql.js';
 import { getScheduler } from './services/Scheduler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +56,7 @@ async function main() {
   app.use(cookieParser());
   app.use('/api/admin', adminRoutes);
   app.use('/api/messenger', messengerRoutes);
+  app.use('/api/hfsql', hfsqlRoutes);
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   app.get('/admin', (req, res) => {

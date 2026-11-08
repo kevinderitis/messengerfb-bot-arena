@@ -34,6 +34,17 @@ export default {
   scheduler: {
     enabled: process.env.SCHEDULER_ENABLED !== 'false',
   },
+  hfsql: {
+    mode: process.env.HFSQL_MODE || 'client-server',
+    driver: process.env.HFSQL_DRIVER || '{HFSQL}',
+    server: process.env.HFSQL_SERVER || '127.0.0.1',
+    port: parseInt(process.env.HFSQL_PORT, 10) || 4900,
+    database: process.env.HFSQL_DATABASE || '',
+    user: process.env.HFSQL_USER || '',
+    password: process.env.HFSQL_PASSWORD || '',
+    wdd: process.env.HFSQL_WDD || '',
+    dataDir: process.env.HFSQL_DATA_DIR || '',
+  },
   paths: {
     rootDir,
     logsDir: path.join(rootDir, 'logs'),
