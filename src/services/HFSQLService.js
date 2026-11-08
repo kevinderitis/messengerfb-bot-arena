@@ -140,10 +140,35 @@ export async function query(sql, params = []) {
   try {
     logger.info({ sql: sql.substring(0, 200) }, 'EJECUTANDO QUERY HFSQL');
     const result = await connection.query(sql, params);
+    logger.info({ resultType: typeof result, isArray: Array.isArray(result), keys: result ? Object.keys(result) : null, length: result?.length }, 'RESULTADO RAW HFSQL');
     // result is an array of row objects, with .columns, .count, etc.
-    const rows = Array.isArray(result) ? result.filter((r) => r && typeof r === 'object' && !r.statement) : [];
-    const columns = result.columns ? result.columns.map((c) => c.name) : (rows.length > 0 ? Object.keys(rows[0]) : []);
-    return { rows, columns, count: result.count, statement: result.statement };
+    // But the filter might remove all rows if they have a 'statement' property.
+    // Also, result might be an object with a different structure for HFSQL.
+    let rows = [];
+    let columns = [];
+    if (Array.isArray(result)) {
+      // The array itself has .columns, .count, .statement properties
+      columns = result.columns ? result.columns.map((c) => (typeof c === 'string' ? c : c.name)) : [];
+      rows = result.filter((r) => r && typeof r === 'object');
+      // If rows have a 'statement' property, they might be metadata, not data
+      // But typically data rows don't have 'statement', so this should be fine
+      // Remove the array-level properties from individual rows
+      if (rows.length > 0 && rows[0].statement !== undefined && rows.length === 1) {
+        // Might be just metadata, try to get actual data differently
+        rows = [];
+      }
+    } else if (result && typeof result === 'object') {
+      // Maybe result is an object with a rows/data property
+      if (Array.isArray(result.rows)) rows = result.rows;
+      else if (Array.isArray(result.data)) rows = result.data;
+      else if (Array.isArray(result.recordset)) rows = result.recordset;
+      if (result.columns) columns = result.columns.map((c) => (typeof c === 'string' ? c : c.name));
+    }
+    if (columns.length === 0 && rows.length > 0) {
+      columns = Object.keys(rows[0]);
+    }
+    logger.info({ rowCount: rows.length, columnCount: columns.length, columns }, 'RESULTADO PROCESADO HFSQL');
+    return { rows, columns, count: Array.isArray(result) ? result.count : (result?.count || rows.length), statement: Array.isArray(result) ? result.statement : result?.statement };
   } catch (err) {
     logger.error({ err, sql }, 'ERROR AL EJECUTAR QUERY HFSQL');
     throw err;
