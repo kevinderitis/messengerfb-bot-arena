@@ -5,6 +5,19 @@ import * as hfsql from '../services/HFSQLService.js';
 
 const router = Router();
 
+// API token auth for external access
+function apiAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token de API requerido' });
+  }
+  const token = authHeader.slice(7);
+  if (token !== config.messenger.apiToken) {
+    return res.status(401).json({ error: 'Token inválido' });
+  }
+  next();
+}
+
 import jwt from 'jsonwebtoken';
 
 function auth(req, res, next) {
@@ -80,6 +93,105 @@ router.post('/query', auth, async (req, res) => {
   } catch (err) {
     logger.error({ err }, 'ERROR AL EJECUTAR QUERY HFSQL');
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint para obtener checkouts del día
+// Ejecuta la consulta SQL y devuelve los datos mapeados al formato requerido
+router.get('/checkouts', auth, async (req, res) => {
+  try {
+    // Asegurar conexión
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    // Calcular fecha actual en formato YYYYMMDD
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const pFechaHoy = `${yyyy}${mm}${dd}`;
+
+    logger.info({ pFechaHoy }, 'CONSULTANDO CHECKOUTS PARA FECHA');
+
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
+    const result = await hfsql.query(sql);
+
+    // Mapear los resultados al formato requerido
+    const checkouts = (result.rows || []).map((row) => {
+      // Función auxiliar para obtener valor case-insensitive
+      const get = (key) => {
+        const lower = key.toLowerCase();
+        for (const k of Object.keys(row)) {
+          if (k.toLowerCase() === lower) return row[k];
+        }
+        return null;
+      };
+      return {
+        name: get('sLabel1'),
+        state: get('nState'),
+        comments: get('sComments'),
+        room: get('sLabel'),
+        // También incluir todos los campos originales por si se necesitan
+        raw: row,
+      };
+    });
+
+    res.json({
+      success: true,
+      date: pFechaHoy,
+      count: checkouts.length,
+      checkouts,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER CHECKOUTS');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint para obtener checkouts (accesible con token de API para uso externo)
+router.get('/checkouts/external', apiAuth, async (req, res) => {
+  try {
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const pFechaHoy = `${yyyy}${mm}${dd}`;
+
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
+    const result = await hfsql.query(sql);
+
+    const checkouts = (result.rows || []).map((row) => {
+      const get = (key) => {
+        const lower = key.toLowerCase();
+        for (const k of Object.keys(row)) {
+          if (k.toLowerCase() === lower) return row[k];
+        }
+        return null;
+      };
+      return {
+        name: get('sLabel1'),
+        state: get('nState'),
+        comments: get('sComments'),
+        room: get('sLabel'),
+      };
+    });
+
+    res.json({
+      success: true,
+      date: pFechaHoy,
+      count: checkouts.length,
+      checkouts,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER CHECKOUTS (EXTERNAL)');
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
