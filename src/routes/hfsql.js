@@ -115,34 +115,84 @@ router.get('/checkouts', auth, async (req, res) => {
 
     logger.info({ pFechaHoy }, 'CONSULTANDO CHECKOUTS PARA FECHA');
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
     const result = await hfsql.query(sql);
 
     // Mapear los resultados al formato requerido
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    // Detectar campo de propiedad
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    // Detectar campo de tipo (privada/dormitorio)
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'nType', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
     const checkouts = (result.rows || []).map((row) => {
-      // Función auxiliar para obtener valor case-insensitive
-      const get = (key) => {
-        const lower = key.toLowerCase();
-        for (const k of Object.keys(row)) {
-          if (k.toLowerCase() === lower) return row[k];
-        }
-        return null;
-      };
+      const propField = propertyField(row);
+      const typField = typeField(row);
       return {
-        name: get('sLabel1'),
-        state: get('nState'),
-        comments: get('sComments'),
-        room: get('sLabel'),
-        // También incluir todos los campos originales por si se necesitan
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
         raw: row,
       };
     });
+
+    // Ordenar: propiedad -> numero de habitacion -> tipo (privada/dormitorio)
+    checkouts.sort((a, b) => {
+      // Propiedad
+      const propA = a.property != null ? String(a.property) : '';
+      const propB = b.property != null ? String(b.property) : '';
+      if (propA !== propB) return propA.localeCompare(propB);
+      // Numero de habitacion (extraer numero de sLabel)
+      const roomA = String(a.room || '').replace(/[^0-9]/g, '');
+      const roomB = String(b.room || '').replace(/[^0-9]/g, '');
+      const numA = roomA ? parseInt(roomA, 10) : 0;
+      const numB = roomB ? parseInt(roomB, 10) : 0;
+      if (numA !== numB) return numA - numB;
+      // Tipo (privada antes que dormitorio, o alfabetico)
+      const typeA = String(a.type || '').toLowerCase();
+      const typeB = String(b.type || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    });
+
+    // Agrupar por propiedad
+    const grouped = {};
+    for (const c of checkouts) {
+      const key = c.property != null ? String(c.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(c);
+    }
 
     res.json({
       success: true,
       date: pFechaHoy,
       count: checkouts.length,
       checkouts,
+      grouped,
     });
   } catch (err) {
     logger.error({ err }, 'ERROR AL OBTENER CHECKOUTS');
@@ -164,30 +214,75 @@ router.get('/checkouts/external', apiAuth, async (req, res) => {
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
     const result = await hfsql.query(sql);
 
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
     const checkouts = (result.rows || []).map((row) => {
-      const get = (key) => {
-        const lower = key.toLowerCase();
-        for (const k of Object.keys(row)) {
-          if (k.toLowerCase() === lower) return row[k];
-        }
-        return null;
-      };
+      const propField = propertyField(row);
+      const typField = typeField(row);
       return {
-        name: get('sLabel1'),
-        state: get('nState'),
-        comments: get('sComments'),
-        room: get('sLabel'),
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
       };
     });
+
+    checkouts.sort((a, b) => {
+      const propA = a.property != null ? String(a.property) : '';
+      const propB = b.property != null ? String(b.property) : '';
+      if (propA !== propB) return propA.localeCompare(propB);
+      const roomA = String(a.room || '').replace(/[^0-9]/g, '');
+      const roomB = String(b.room || '').replace(/[^0-9]/g, '');
+      const numA = roomA ? parseInt(roomA, 10) : 0;
+      const numB = roomB ? parseInt(roomB, 10) : 0;
+      if (numA !== numB) return numA - numB;
+      const typeA = String(a.type || '').toLowerCase();
+      const typeB = String(b.type || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    });
+
+    const grouped = {};
+    for (const c of checkouts) {
+      const key = c.property != null ? String(c.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(c);
+    }
 
     res.json({
       success: true,
       date: pFechaHoy,
       count: checkouts.length,
       checkouts,
+      grouped,
     });
   } catch (err) {
     logger.error({ err }, 'ERROR AL OBTENER CHECKOUTS (EXTERNAL)');
