@@ -106,23 +106,16 @@ router.get('/checkouts', auth, async (req, res) => {
       await hfsql.connect();
     }
 
-    // Calcular fecha actual y fecha anterior en formato YYYYMMDD
+    // Calcular fecha actual en formato YYYYMMDD
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
 
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yy = yesterday.getFullYear();
-    const ym = String(yesterday.getMonth() + 1).padStart(2, '0');
-    const yd = String(yesterday.getDate()).padStart(2, '0');
-    const pFechaAyer = `${yy}${ym}${yd}`;
+    logger.info({ pFechaHoy }, 'CONSULTANDO CHECKOUTS PARA FECHA');
 
-    logger.info({ pFechaHoy, pFechaAyer }, 'CONSULTANDO CHECKOUTS PARA FECHAS');
-
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate IN (${pFechaHoy}, ${pFechaAyer})`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
     const result = await hfsql.query(sql);
 
     // Mapear los resultados al formato requerido
@@ -147,7 +140,7 @@ router.get('/checkouts', auth, async (req, res) => {
 
     res.json({
       success: true,
-      dates: [pFechaAyer, pFechaHoy],
+      date: pFechaHoy,
       count: checkouts.length,
       checkouts,
     });
@@ -171,14 +164,7 @@ router.get('/checkouts/external', apiAuth, async (req, res) => {
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
 
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yy = yesterday.getFullYear();
-    const ym = String(yesterday.getMonth() + 1).padStart(2, '0');
-    const yd = String(yesterday.getDate()).padStart(2, '0');
-    const pFechaAyer = `${yy}${ym}${yd}`;
-
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate IN (${pFechaHoy}, ${pFechaAyer})`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy}`;
     const result = await hfsql.query(sql);
 
     const checkouts = (result.rows || []).map((row) => {
@@ -199,7 +185,7 @@ router.get('/checkouts/external', apiAuth, async (req, res) => {
 
     res.json({
       success: true,
-      dates: [pFechaAyer, pFechaHoy],
+      date: pFechaHoy,
       count: checkouts.length,
       checkouts,
     });
