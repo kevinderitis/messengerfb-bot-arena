@@ -290,4 +290,187 @@ router.get('/checkouts/external', apiAuth, async (req, res) => {
   }
 });
 
+// Endpoint para obtener check-ins del día (nState = 1)
+router.get('/checkins', auth, async (req, res) => {
+  try {
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const pFechaHoy = `${yyyy}${mm}${dd}`;
+
+    logger.info({ pFechaHoy }, 'CONSULTANDO CHECKINS PARA FECHA');
+
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 1 AND BR.dEndDate = ${pFechaHoy}`;
+    const result = await hfsql.query(sql);
+
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const checkins = (result.rows || []).map((row) => {
+      const propField = propertyField(row);
+      const typField = typeField(row);
+      return {
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
+        raw: row,
+      };
+    });
+
+    checkins.sort((a, b) => {
+      const propA = a.property != null ? String(a.property) : '';
+      const propB = b.property != null ? String(b.property) : '';
+      if (propA !== propB) return propA.localeCompare(propB);
+      const roomA = String(a.room || '').replace(/[^0-9]/g, '');
+      const roomB = String(b.room || '').replace(/[^0-9]/g, '');
+      const numA = roomA ? parseInt(roomA, 10) : 0;
+      const numB = roomB ? parseInt(roomB, 10) : 0;
+      if (numA !== numB) return numA - numB;
+      const typeA = String(a.type || '').toLowerCase();
+      const typeB = String(b.type || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    });
+
+    const grouped = {};
+    for (const c of checkins) {
+      const key = c.property != null ? String(c.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(c);
+    }
+
+    res.json({
+      success: true,
+      date: pFechaHoy,
+      count: checkins.length,
+      checkins,
+      grouped,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER CHECKINS');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint para obtener check-ins (accesible con token de API para uso externo)
+router.get('/checkins/external', apiAuth, async (req, res) => {
+  try {
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const pFechaHoy = `${yyyy}${mm}${dd}`;
+
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 1 AND BR.dEndDate = ${pFechaHoy}`;
+    const result = await hfsql.query(sql);
+
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const checkins = (result.rows || []).map((row) => {
+      const propField = propertyField(row);
+      const typField = typeField(row);
+      return {
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
+      };
+    });
+
+    checkins.sort((a, b) => {
+      const propA = a.property != null ? String(a.property) : '';
+      const propB = b.property != null ? String(b.property) : '';
+      if (propA !== propB) return propA.localeCompare(propB);
+      const roomA = String(a.room || '').replace(/[^0-9]/g, '');
+      const roomB = String(b.room || '').replace(/[^0-9]/g, '');
+      const numA = roomA ? parseInt(roomA, 10) : 0;
+      const numB = roomB ? parseInt(roomB, 10) : 0;
+      if (numA !== numB) return numA - numB;
+      const typeA = String(a.type || '').toLowerCase();
+      const typeB = String(b.type || '').toLowerCase();
+      return typeA.localeCompare(typeB);
+    });
+
+    const grouped = {};
+    for (const c of checkins) {
+      const key = c.property != null ? String(c.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(c);
+    }
+
+    res.json({
+      success: true,
+      date: pFechaHoy,
+      count: checkins.length,
+      checkins,
+      grouped,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER CHECKINS (EXTERNAL)');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
