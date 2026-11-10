@@ -473,4 +473,73 @@ router.get('/checkins/external', apiAuth, async (req, res) => {
   }
 });
 
+// Endpoint para ejecutar SQL (UPDATE, DELETE, etc.) - requiere auth de panel
+router.post('/execute', auth, async (req, res) => {
+  try {
+    const { sql, params } = req.body;
+    if (!sql || typeof sql !== 'string' || !sql.trim()) {
+      return res.status(400).json({ error: 'Se requiere una consulta SQL' });
+    }
+    const result = await hfsql.execute(sql, params || []);
+    res.json(result);
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL EJECUTAR SQL HFSQL');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint para aplicar check-in (cambiar nState a 2 = ocupado)
+router.post('/apply-checkin', auth, async (req, res) => {
+  try {
+    const { bookingRoomId, nIdRooms } = req.body;
+    if (!bookingRoomId && !nIdRooms) {
+      return res.status(400).json({ error: 'Se requiere bookingRoomId o nIdRooms' });
+    }
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+    // Update nState to 2 (occupied)
+    let sql;
+    if (bookingRoomId) {
+      sql = `UPDATE BOOKING_ROOMS SET nSTATE = 2 WHERE nID_BOOKING_ROOMS = ${bookingRoomId}`;
+    } else {
+      sql = `UPDATE BOOKING_ROOMS SET nSTATE = 2 WHERE nID_ROOMS = ${nIdRooms} AND nSTATE = 1`;
+    }
+    const result = await hfsql.execute(sql);
+    logger.info({ bookingRoomId, nIdRooms }, 'CHECK-IN APLICADO, HABITACION OCUPADA');
+    res.json({ success: true, message: 'Check-in aplicado, habitación ocupada', result });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL APLICAR CHECK-IN');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint para cancelar check-in del día
+router.post('/cancel-checkin', auth, async (req, res) => {
+  try {
+    const { bookingRoomId, nIdRooms } = req.body;
+    if (!bookingRoomId && !nIdRooms) {
+      return res.status(400).json({ error: 'Se requiere bookingRoomId o nIdRooms' });
+    }
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+    // Set nState back to 0 (cancelled/not pending) or delete
+    let sql;
+    if (bookingRoomId) {
+      sql = `UPDATE BOOKING_ROOMS SET nSTATE = 0 WHERE nID_BOOKING_ROOMS = ${bookingRoomId}`;
+    } else {
+      sql = `UPDATE BOOKING_ROOMS SET nSTATE = 0 WHERE nID_ROOMS = ${nIdRooms} AND nSTATE = 1`;
+    }
+    const result = await hfsql.execute(sql);
+    logger.info({ bookingRoomId, nIdRooms }, 'CHECK-IN CANCELADO');
+    res.json({ success: true, message: 'Check-in cancelado', result });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL CANCELAR CHECK-IN');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

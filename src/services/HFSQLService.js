@@ -187,4 +187,33 @@ export async function query(sql, params = []) {
   }
 }
 
-export default { connect, disconnect, getStatus, testConnection, getTables, getColumns, query };
+export async function execute(sql, params = []) {
+  if (!connected || !connection) {
+    throw new Error('No conectado a HFSQL');
+  }
+  const trimmed = sql.trim().toUpperCase();
+  // Block dangerous operations
+  if (trimmed.startsWith('DROP') || trimmed.startsWith('TRUNCATE') || trimmed.startsWith('ALTER') || trimmed.startsWith('CREATE')) {
+    throw new Error('Operación no permitida por seguridad');
+  }
+  try {
+    logger.info({ sql: sql.substring(0, 200) }, 'EJECUTANDO SQL HFSQL');
+    const result = await connection.query(sql, params);
+    // Convert BigInt
+    if (Array.isArray(result)) {
+      for (const row of result) {
+        if (row && typeof row === 'object') {
+          for (const key of Object.keys(row)) {
+            if (typeof row[key] === 'bigint') row[key] = Number(row[key]);
+          }
+        }
+      }
+    }
+    return { success: true, result };
+  } catch (err) {
+    logger.error({ err, sql }, 'ERROR AL EJECUTAR SQL HFSQL');
+    throw err;
+  }
+}
+
+export default { connect, disconnect, getStatus, testConnection, getTables, getColumns, query, execute };

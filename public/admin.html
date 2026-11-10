@@ -118,6 +118,8 @@ tr:hover td { background: rgba(255,255,255,.02); }
     <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
     <button class="tab" data-tab="send" onclick="showTab('send')">Send Message</button>
     <button class="tab" data-tab="sql" onclick="showTab('sql')">Query SQL</button>
+    <button class="tab" data-tab="checkouts" onclick="showTab('checkouts')">Checkouts</button>
+    <button class="tab" data-tab="checkins" onclick="showTab('checkins')">Pending check-in</button>
     <button class="tab" data-tab="scheduled" onclick="showTab('scheduled')">Scheduled</button>
     <button class="tab" data-tab="history" onclick="showTab('history')">History</button>
   </nav>
@@ -161,6 +163,30 @@ tr:hover td { background: rgba(255,255,255,.02); }
         <div style="margin-bottom:16px"><label>Message</label><textarea id="send-message" rows="4" placeholder="Type your message..."></textarea></div>
         <button class="btn-primary" onclick="sendMessageNow()">Send Now</button>
         <div id="send-result" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <div id="panel-checkouts" class="panel">
+      <div class="card">
+        <h3>Checkouts (Hoy y Ayer)</h3>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Habitaciones con checkout programado para hoy y ayer.</p>
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn-primary" onclick="loadCheckouts()">Refresh Checkouts</button>
+        </div>
+        <div id="checkouts-list"><div class="empty">Click "Refresh Checkouts" to load</div></div>
+        <div id="checkouts-error" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <div id="panel-checkins" class="panel">
+      <div class="card">
+        <h3>Pending check-in</h3>
+        <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Check-ins pendientes del día. Confirmar el check-in marca la habitación como ocupada.</p>
+        <div class="btn-group" style="margin-bottom:16px">
+          <button class="btn-primary" onclick="loadCheckins()">Refresh</button>
+        </div>
+        <div id="checkins-list"><div class="empty">Click "Refresh" to load</div></div>
+        <div id="checkins-error" style="margin-top:16px"></div>
       </div>
     </div>
 
@@ -307,6 +333,8 @@ function showTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
   if (name === 'dashboard') { refreshStatus(); loadHistory(); }
   if (name === 'sql') { hfsqlRefreshStatus(); hfsqlLoadTables(); }
+  if (name === 'checkouts') { loadCheckouts(); }
+  if (name === 'checkins') { loadCheckins(); }
   if (name === 'scheduled') loadScheduled();
   if (name === 'history') loadHistory();
 }
@@ -486,6 +514,128 @@ async function loadHistory() {
     render(list.slice(0, 5), 'recent-sends');
     render(list, 'history-list');
   } catch (err) { toast(err.message, 'error'); }
+}
+
+// --- Checkouts ---
+async function loadCheckouts() {
+  const listEl = document.getElementById('checkouts-list');
+  const errEl = document.getElementById('checkouts-error');
+  listEl.innerHTML = '<div class="empty">Loading...</div>';
+  errEl.innerHTML = '';
+  try {
+    const data = await api('/api/hfsql/checkouts');
+    const checkouts = data.checkouts || [];
+    if (!checkouts.length) { listEl.innerHTML = '<div class="empty">No checkouts found</div>'; return; }
+    // Group by property
+    const grouped = data.grouped || {};
+    let html = '';
+    for (const [prop, items] of Object.entries(grouped)) {
+      html += `<div style="margin-bottom:16px"><h4 style="color:var(--accent);margin-bottom:8px">${esc(prop)}</h4>`;
+      items.forEach(c => {
+        html += `<div class="chat-item">
+          <div class="info">
+            <div class="name">${esc(c.room || '')} - ${esc(c.name || '')}</div>
+            <div class="meta">${esc(c.type || '')} · ${esc(c.comments || '')}</div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    listEl.innerHTML = html;
+  } catch (err) {
+    listEl.innerHTML = '<div class="empty">Error loading checkouts</div>';
+    errEl.innerHTML = `<div class="empty log-failed">Error: ${esc(err.message)}</div>`;
+    toast(err.message, 'error');
+  }
+}
+
+// --- Pending Check-in ---
+let checkinMenuOpen = null;
+
+async function loadCheckins() {
+  const listEl = document.getElementById('checkins-list');
+  const errEl = document.getElementById('checkins-error');
+  listEl.innerHTML = '<div class="empty">Loading...</div>';
+  errEl.innerHTML = '';
+  try {
+    const data = await api('/api/hfsql/checkins');
+    const checkins = data.checkins || [];
+    if (!checkins.length) { listEl.innerHTML = '<div class="empty">No pending check-ins</div>'; return; }
+    // Group by property
+    const grouped = data.grouped || {};
+    let html = '';
+    for (const [prop, items] of Object.entries(grouped)) {
+      html += `<div style="margin-bottom:16px"><h4 style="color:var(--accent);margin-bottom:8px">${esc(prop)}</h4>`;
+      items.forEach(c => {
+        const id = c.raw && c.raw.nID_BOOKING_ROOMS ? c.raw.nID_BOOKING_ROOMS : (c.raw && c.raw.NID_BOOKING_ROOMS ? c.raw.NID_BOOKING_ROOMS : '');
+        const nIdRooms = c.raw && c.raw.nID_ROOMS ? c.raw.nID_ROOMS : (c.raw && c.raw.NID_ROOMS ? c.raw.NID_ROOMS : '');
+        html += `<div class="chat-item" style="position:relative">
+          <div class="info">
+            <div class="name">${esc(c.room || '')} - ${esc(c.name || '')}</div>
+            <div class="meta">${esc(c.type || '')} · ${esc(c.comments || '')}</div>
+          </div>
+          <div class="actions" style="position:relative">
+            <button class="btn-secondary" style="padding:6px 10px;font-size:16px" onclick="toggleCheckinMenu('${esc(String(id))}', '${esc(String(nIdRooms))}', this)">⋮</button>
+            <div id="checkin-menu-${esc(String(id))}" class="checkin-dropdown" style="display:none;position:absolute;right:0;top:36px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:4px 0;z-index:10;min-width:180px;box-shadow:0 4px 12px rgba(0,0,0,.3)">
+              <button style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:var(--text);font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'" onclick="applyCheckin('${esc(String(id))}', '${esc(String(nIdRooms))}')">Apply check-in</button>
+              <button style="display:block;width:100%;text-align:left;padding:8px 16px;background:none;border:none;color:var(--danger);font-size:13px;cursor:pointer" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'" onclick="cancelCheckin('${esc(String(id))}', '${esc(String(nIdRooms))}')">Cancel check-in for the day</button>
+            </div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+    listEl.innerHTML = html;
+  } catch (err) {
+    listEl.innerHTML = '<div class="empty">Error loading check-ins</div>';
+    errEl.innerHTML = `<div class="empty log-failed">Error: ${esc(err.message)}</div>`;
+    toast(err.message, 'error');
+  }
+}
+
+function toggleCheckinMenu(id, nIdRooms, btn) {
+  // Close any open menu
+  document.querySelectorAll('.checkin-dropdown').forEach(d => d.style.display = 'none');
+  const menu = document.getElementById('checkin-menu-' + id);
+  if (menu) {
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+  checkinMenuOpen = id;
+}
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.checkin-dropdown') && !e.target.closest('button[onclick*="toggleCheckinMenu"]')) {
+    document.querySelectorAll('.checkin-dropdown').forEach(d => d.style.display = 'none');
+  }
+});
+
+async function applyCheckin(bookingRoomId, nIdRooms) {
+  document.querySelectorAll('.checkin-dropdown').forEach(d => d.style.display = 'none');
+  try {
+    const data = await api('/api/hfsql/apply-checkin', {
+      method: 'POST',
+      body: JSON.stringify({ bookingRoomId: bookingRoomId || undefined, nIdRooms: nIdRooms || undefined }),
+    });
+    toast(data.message || 'Check-in applied');
+    loadCheckins();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+async function cancelCheckin(bookingRoomId, nIdRooms) {
+  document.querySelectorAll('.checkin-dropdown').forEach(d => d.style.display = 'none');
+  try {
+    const data = await api('/api/hfsql/cancel-checkin', {
+      method: 'POST',
+      body: JSON.stringify({ bookingRoomId: bookingRoomId || undefined, nIdRooms: nIdRooms || undefined }),
+    });
+    toast(data.message || 'Check-in cancelled');
+    loadCheckins();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 function esc(s) {
