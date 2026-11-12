@@ -687,9 +687,19 @@ router.get('/bookings/external', apiAuth, async (req, res) => {
       return null;
     };
 
+    const bedField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['nbed', 'bed', 'bednumber', 'nbednumber', 'sbed', 'bedno', 'nbedno', 'nbedid'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
     const bookings = (result.rows || []).map((row) => {
       const propField = propertyField(row);
       const typField = typeField(row);
+      const bedF = bedField(row);
       return {
         name: get(row, 'sLabel1'),
         state: get(row, 'nState'),
@@ -697,6 +707,7 @@ router.get('/bookings/external', apiAuth, async (req, res) => {
         room: get(row, 'sLabel'),
         property: propField ? get(row, propField) : null,
         type: typField ? get(row, typField) : null,
+        bed: bedF ? get(row, bedF) : null,
         startDate: get(row, 'dStartDate'),
         endDate: get(row, 'dEndDate'),
       };
