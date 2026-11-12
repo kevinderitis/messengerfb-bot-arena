@@ -542,4 +542,153 @@ router.post('/cancel-checkin', auth, async (req, res) => {
   }
 });
 
+// Endpoint para obtener todas las reservas desde una fecha en adelante
+// Acepta query param ?fromDate=YYYYMMDD (default: hoy)
+router.get('/bookings', auth, async (req, res) => {
+  try {
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    const fromDate = req.query.fromDate || (() => {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}${mm}${dd}`;
+    })();
+
+    const toDate = req.query.toDate || null;
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : null;
+
+    logger.info({ fromDate, toDate, stateFilter }, 'CONSULTANDO TODAS LAS RESERVAS');
+
+    let sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.dEndDate >= ${fromDate}`;
+    if (toDate) sql += ` AND BR.dEndDate <= ${toDate}`;
+    if (stateFilter !== null && !isNaN(stateFilter)) sql += ` AND BR.nSTATE = ${stateFilter}`;
+    sql += ` ORDER BY BR.dEndDate ASC, R.sLABEL ASC`;
+
+    const result = await hfsql.query(sql);
+
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const bookings = (result.rows || []).map((row) => {
+      const propField = propertyField(row);
+      const typField = typeField(row);
+      return {
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
+        startDate: get(row, 'dStartDate'),
+        endDate: get(row, 'dEndDate'),
+        raw: row,
+      };
+    });
+
+    // Agrupar por propiedad
+    const grouped = {};
+    for (const b of bookings) {
+      const key = b.property != null ? String(b.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(b);
+    }
+
+    res.json({
+      success: true,
+      fromDate,
+      toDate: toDate || null,
+      count: bookings.length,
+      bookings,
+      grouped,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER RESERVAS');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint para obtener reservas (accesible con token de API para uso externo)
+router.get('/bookings/external', apiAuth, async (req, res) => {
+  try {
+    const status = hfsql.getStatus();
+    if (!status.connected) {
+      await hfsql.connect();
+    }
+
+    const fromDate = req.query.fromDate || (() => {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}${mm}${dd}`;
+    })();
+
+    const toDate = req.query.toDate || null;
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : null;
+
+    let sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.dEndDate >= ${fromDate}`;
+    if (toDate) sql += ` AND BR.dEndDate <= ${toDate}`;
+    if (stateFilter !== null && !isNaN(stateFilter)) sql += ` AND BR.nSTATE = ${stateFilter}`;
+    sql += ` ORDER BY BR.dEndDate ASC, R.sLABEL ASC`;
+
+    const result = await hfsql.query(sql);
+
+    const get = (row, key) => {
+      const lower = key.toLowerCase();
+      for (const k of Object.keys(row)) {
+        if (k.toLowerCase() === lower) return row[k];
+      }
+      return null;
+    };
+
+    const bookings = (result.rows || []).map((row) => ({
+      name: get(row, 'sLabel1'),
+      state: get(row, 'nState'),
+      comments: get(row, 'sComments'),
+      room: get(row, 'sLabel'),
+      startDate: get(row, 'dStartDate'),
+      endDate: get(row, 'dEndDate'),
+    }));
+
+    res.json({
+      success: true,
+      fromDate,
+      toDate: toDate || null,
+      count: bookings.length,
+      bookings,
+    });
+  } catch (err) {
+    logger.error({ err }, 'ERROR AL OBTENER RESERVAS (EXTERNAL)');
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
