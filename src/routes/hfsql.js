@@ -669,14 +669,45 @@ router.get('/bookings/external', apiAuth, async (req, res) => {
       return null;
     };
 
-    const bookings = (result.rows || []).map((row) => ({
-      name: get(row, 'sLabel1'),
-      state: get(row, 'nState'),
-      comments: get(row, 'sComments'),
-      room: get(row, 'sLabel'),
-      startDate: get(row, 'dStartDate'),
-      endDate: get(row, 'dEndDate'),
-    }));
+    const propertyField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['sproperty', 'property', 'spropertyname', 'propertyname', 'nid_property', 'nproperty', 'slabelproperty', 'labelproperty'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const typeField = (row) => {
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      const candidates = ['stype', 'type', 'sroomtype', 'roomtype', 'scategory', 'category', 'bisprivate', 'isprivate', 'ntype'];
+      for (const c of candidates) {
+        if (keys.includes(c)) return c;
+      }
+      return null;
+    };
+
+    const bookings = (result.rows || []).map((row) => {
+      const propField = propertyField(row);
+      const typField = typeField(row);
+      return {
+        name: get(row, 'sLabel1'),
+        state: get(row, 'nState'),
+        comments: get(row, 'sComments'),
+        room: get(row, 'sLabel'),
+        property: propField ? get(row, propField) : null,
+        type: typField ? get(row, typField) : null,
+        startDate: get(row, 'dStartDate'),
+        endDate: get(row, 'dEndDate'),
+      };
+    });
+
+    const grouped = {};
+    for (const b of bookings) {
+      const key = b.property != null ? String(b.property) : 'Sin propiedad';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(b);
+    }
 
     res.json({
       success: true,
@@ -684,6 +715,7 @@ router.get('/bookings/external', apiAuth, async (req, res) => {
       toDate: toDate || null,
       count: bookings.length,
       bookings,
+      grouped,
     });
   } catch (err) {
     logger.error({ err }, 'ERROR AL OBTENER RESERVAS (EXTERNAL)');
