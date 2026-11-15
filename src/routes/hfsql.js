@@ -115,7 +115,8 @@ router.get('/checkouts', auth, async (req, res) => {
 
     logger.info({ pFechaHoy }, 'CONSULTANDO CHECKOUTS PARA FECHA');
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : 3;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = ${stateFilter} AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
     const result = await hfsql.query(sql);
 
     // Mapear los resultados al formato requerido
@@ -213,8 +214,9 @@ router.get('/checkouts/external', apiAuth, async (req, res) => {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : 3;
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 3 AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = ${stateFilter} AND BR.dEndDate = ${pFechaHoy} ORDER BY R.sLABEL ASC`;
     const result = await hfsql.query(sql);
 
     const get = (row, key) => {
