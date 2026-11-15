@@ -304,9 +304,10 @@ router.get('/checkins', auth, async (req, res) => {
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
 
-    logger.info({ pFechaHoy }, 'CONSULTANDO CHECKINS PARA FECHA');
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : 1;
+    logger.info({ pFechaHoy, stateFilter }, 'CONSULTANDO CHECKINS PARA FECHA');
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 1 AND BR.dStartDate = ${pFechaHoy}`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = ${stateFilter} AND BR.dStartDate = ${pFechaHoy}`;
     const result = await hfsql.query(sql);
 
     const get = (row, key) => {
@@ -396,8 +397,9 @@ router.get('/checkins/external', apiAuth, async (req, res) => {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const pFechaHoy = `${yyyy}${mm}${dd}`;
+    const stateFilter = req.query.state ? parseInt(req.query.state, 10) : 1;
 
-    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = 1 AND BR.dStartDate = ${pFechaHoy}`;
+    const sql = `SELECT BR.*, R.sLABEL FROM BOOKING_ROOMS BR INNER JOIN ROOMS R ON BR.nID_ROOMS = R.nID_ROOMS WHERE BR.nSTATE = ${stateFilter} AND BR.dStartDate = ${pFechaHoy}`;
     const result = await hfsql.query(sql);
 
     const get = (row, key) => {
